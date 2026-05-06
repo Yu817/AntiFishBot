@@ -1,0 +1,20 @@
+name: AntiFishBot
+version: ${project.version}
+main: com.helloyu.antifishbot.AntiFishBot
+api-version: '1.21'
+author: HelloYu
+description: 防掛機釣魚插件 - 多重偵測機制防止自動釣魚
+
+commands:
+  afb:
+    description: AntiFishBot 管理指令
+    usage: /afb <reload|check|stats|reset>
+    permission: antifishbot.admin
+
+permissions:
+  antifishbot.admin:
+    description: 管理 AntiFishBot 插件
+    default: op
+  antifishbot.bypass:
+    description: 繞過掛機釣魚偵測
+    default: false

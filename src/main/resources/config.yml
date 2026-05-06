@@ -1,0 +1,132 @@
+# ====================================
+# AntiFishBot 設定檔
+# 防掛機釣魚插件
+# ====================================
+
+# 偵測設定
+detection:
+  # 啟用各種偵測機制
+  enabled:
+    interval-analysis: true      # 時間間隔分析
+    look-direction: true         # 視角移動偵測
+    position-analysis: true      # 位置固定偵測（針對壓力板釣魚機）
+
+    continuous-fishing: true     # 連續釣魚計數
+    success-rate: true           # 成功率異常偵測
+
+  # 時間間隔分析參數
+  interval:
+    # 間隔標準差低於此值視為可疑（正常玩家應有較大變化）
+    min-deviation-ms: 150
+    # 需要多少次釣魚才開始分析
+    min-samples: 5
+
+  # 視角偵測參數
+  look:
+    # 視角變化低於此角度視為可疑（連續多少次無視角移動）
+    min-change-degrees: 0.5
+    # 需要連續多少次無視角移動才觸發
+    consecutive-count: 8
+
+
+
+  # 位置偵測參數 (針對壓力板+鐵地板門+音階盒釣魚機)
+  position:
+    # XZ 位移標準差低於此值視為可疑（正常玩家會走動換位，掛機玩家幾乎不動）
+    min-deviation-blocks: 0.5
+    # Y 軸波動幅度小於此值被視為地板門微抖（格）
+    y-jitter-threshold: 0.5
+    # 需要多少次釣魚才開始位置分析
+    min-samples: 8
+
+  # 連續釣魚計數
+  continuous:
+    # 連續成功釣魚多少次後發送驗證
+    trigger-count: 30
+    # 重置計數的間隔時間（秒）- 玩家停止釣魚超過此時間會重置
+    reset-after-seconds: 60
+
+  # 成功率偵測
+  success-rate:
+    # 成功率高於此值視為可疑（0.0-1.0）
+    suspicious-threshold: 0.95
+    # 需要多少次嘗試才開始計算
+    min-attempts: 20
+
+  # 互動頻率偵測 (針對右鍵連點 AFK 機制)
+  interact-spam:
+    # 是否啟用
+    enabled: true
+    # 每秒點擊次數 (CPS) 閾值
+    cps-threshold: 4
+    # 連續達到閾值多少秒後觸發
+    trigger-seconds: 10
+    # 偵測的方塊類型 (增加 Note Block, Iron Door, Trapdoor)
+    monitored-blocks:
+      - NOTE_BLOCK
+      - IRON_DOOR
+      - IRON_TRAPDOOR
+      - OAK_TRAPDOOR
+      - SPRUCE_TRAPDOOR
+      - BIRCH_TRAPDOOR
+      - JUNGLE_TRAPDOOR
+      - ACACIA_TRAPDOOR
+      - DARK_OAK_TRAPDOOR
+      - MANGROVE_TRAPDOOR
+      - CHERRY_TRAPDOOR
+      - BAMBOO_TRAPDOOR
+      - CRIMSON_TRAPDOOR
+      - WARPED_TRAPDOOR
+
+# 可疑分數設定
+scoring:
+  # 各偵測項目的分數權重
+  weights:
+    interval-analysis: 30
+    look-direction: 20
+
+    continuous-fishing: 35
+    success-rate: 20
+
+  # 觸發各等級懲罰的分數閾值
+  thresholds:
+    warning: 40           # 等級1: 警告
+    cancel-catch: 60      # 等級2: 取消成果
+    temp-ban-fishing: 80  # 等級3: 暫時禁止釣魚
+    execute-command: 100  # 等級4: 執行指令
+
+# 驗證設定
+verification:
+  # 是否啟用驗證機制
+  enabled: true
+  # 驗證類型列表 (每次隨機挑選一種)
+  allowed-types:
+    - jump
+    - move
+    - sneak
+    - chat
+    - math
+    - gui
+  # 驗證代碼 (僅用於 chat 類型)
+  chat-code: "verify"
+  # 驗證時限（秒）
+  timeout-seconds: 10
+  # 驗證失敗後的懲罰等級（1-4）
+  failure-penalty-level: 4
+
+# 懲罰設定
+punishment:
+  # 等級3: 暫時禁止釣魚的時間（秒）
+  temp-ban-duration-seconds: 300
+  # 等級4: 執行的指令（可用 %player% 作為玩家名稱佔位符）
+  execute-commands:
+    - "spawn %player%"
+
+# 其他設定
+general:
+  # 每隔多少秒重新計算一次可疑分數
+  check-interval-seconds: 30
+  # 是否在控制台顯示偵測日誌
+  debug: true
+  # 分數衰減（每分鐘減少的分數）
+  score-decay-per-minute: 5

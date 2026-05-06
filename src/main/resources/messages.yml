@@ -1,0 +1,61 @@
+# ====================================
+# AntiFishBot 訊息設定
+# 支援 MiniMessage 格式
+# ====================================
+
+prefix: "<gray>[<aqua>AntiFishBot</aqua>]</gray> "
+
+# 玩家訊息
+player:
+  # 警告訊息（聊天欄）
+  warning: "<yellow>偵測到異常釣魚行為，請注意！</yellow>"
+  # 警告訊息（螢幕中間 Title）
+  warning-title: "<red><bold>⚠ 警告</bold></red>"
+  warning-subtitle: "<yellow>偵測到異常釣魚行為！</yellow>"
+  catch-cancelled: "<red>由於可疑行為，本次釣魚成果已被取消。</red>"
+  fishing-banned: "<red>你已被暫時禁止釣魚 <gold>%duration%</gold> 秒。</red>"
+  # 禁止釣魚時每次嘗試釣魚顯示（ActionBar）
+  fishing-banned-remaining: "<red>🚫 禁止釣魚中！剩餘 <gold>%remaining%</gold> 秒</red>"
+  fishing-unbanned: "<green>你現在可以再次釣魚了。</green>"
+
+
+# 驗證訊息
+verification:
+  jump:
+    prompt: "<gold>請在 <yellow>%timeout%</yellow> 秒內<bold>跳躍</bold>來證明你不是掛機！</gold>"
+    success: "<green>驗證成功！</green>"
+    failure: "<red>驗證失敗！你未能在時限內完成驗證。</red>"
+  move:
+    prompt: "<gold>請在 <yellow>%timeout%</yellow> 秒內<bold>移動</bold>來證明你不是掛機！</gold>"
+    success: "<green>驗證成功！</green>"
+    failure: "<red>驗證失敗！你未能在時限內完成驗證。</red>"
+  sneak:
+    prompt: "<gold>請在 <yellow>%timeout%</yellow> 秒內<bold>蹲下</bold>來證明你不是掛機！</gold>"
+    success: "<green>驗證成功！</green>"
+    failure: "<red>驗證失敗！你未能在時限內完成驗證。</red>"
+
+# 管理員訊息
+admin:
+  reload-success: "<green>設定檔已重新載入。</green>"
+  reload-failed: "<red>設定檔重新載入失敗：%error%</red>"
+  player-not-found: "<red>找不到玩家：%player%</red>"
+  check-header: "<aqua>===== %player% 的釣魚數據 =====</aqua>"
+  check-score: "<gray>當前可疑分數：</gray><yellow>%score%</yellow>"
+  check-fishing-count: "<gray>連續釣魚次數：</gray><yellow>%count%</yellow>"
+  check-success-rate: "<gray>成功率：</gray><yellow>%rate%%</yellow>"
+  check-last-interval: "<gray>最後間隔標準差：</gray><yellow>%deviation%ms</yellow>"
+  check-status: "<gray>狀態：</gray>%status%"
+  status-normal: "<green>正常</green>"
+  status-suspicious: "<yellow>可疑</yellow>"
+  status-banned: "<red>已禁止釣魚</red>"
+  stats-header: "<aqua>===== AntiFishBot 統計 =====</aqua>"
+  stats-tracking: "<gray>追蹤中的玩家：</gray><yellow>%count%</yellow>"
+  stats-verifications: "<gray>今日驗證次數：</gray><yellow>%count%</yellow>"
+  stats-punishments: "<gray>今日懲罰次數：</gray><yellow>%count%</yellow>"
+  reset-success: "<green>已重置玩家 <yellow>%player%</yellow> 的釣魚數據。</green>"
+  usage: |
+    <yellow>用法：</yellow>
+    <gray>/afb reload</gray> - 重新載入設定
+    <gray>/afb check <玩家></gray> - 查看玩家數據
+    <gray>/afb stats</gray> - 查看統計資訊
+    <gray>/afb reset <玩家></gray> - 重置玩家數據
