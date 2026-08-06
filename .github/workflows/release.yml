@@ -2,21 +2,19 @@ name: Release plugin JAR
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
+    tags: ['v*']
+    paths:
+      - 'src/**'
+      - 'pom.xml'
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Release version, for example 1.0.1'
-        required: true
-        type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.repository }}-${{ github.ref }}
-  cancel-in-progress: false
+  group: release-${{ github.repository }}-${{ github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
   release:
@@ -24,6 +22,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Java 21
         uses: actions/setup-java@v4
@@ -35,20 +35,30 @@ jobs:
       - name: Resolve release metadata
         shell: bash
         run: |
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-            VERSION="${{ inputs.version }}"
-            VERSION="${VERSION#v}"
-            TAG="v${VERSION}"
-          else
-            TAG="${GITHUB_REF_NAME}"
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            TAG="$GITHUB_REF_NAME"
             VERSION="${TAG#v}"
+            CHANNEL="stable"
+            ASSET_VERSION="$VERSION"
+          else
+            BASE_VERSION="$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)"
+            BASE_VERSION="${BASE_VERSION%-SNAPSHOT}"
+            TAG="latest"
+            VERSION="${BASE_VERSION}-dev-${GITHUB_SHA::7}"
+            CHANNEL="latest"
+            ASSET_VERSION="latest"
           fi
-          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
-          echo "TAG=${TAG}" >> "$GITHUB_ENV"
-          echo "REPO_NAME=${GITHUB_REPOSITORY#*/}" >> "$GITHUB_ENV"
+          echo "REPO_NAME=$REPO_NAME" >> "$GITHUB_ENV"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
+          echo "ASSET_VERSION=$ASSET_VERSION" >> "$GITHUB_ENV"
 
       - name: Build plugin
-        run: mvn -B -ntp clean package
+        run: |
+          mvn -B -ntp versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
+          mvn -B -ntp clean package
 
       - name: Prepare release asset
         shell: bash
@@ -61,11 +71,31 @@ jobs:
             exit 1
           fi
           mkdir -p release
-          ASSET_PATH="release/${REPO_NAME}-${VERSION}.jar"
+          ASSET_PATH="release/${REPO_NAME}-${ASSET_VERSION}.jar"
           cp "$JAR" "$ASSET_PATH"
-          echo "ASSET_PATH=${ASSET_PATH}" >> "$GITHUB_ENV"
+          echo "ASSET_PATH=$ASSET_PATH" >> "$GITHUB_ENV"
 
-      - name: Create or update GitHub Release
+      - name: Publish rolling latest release
+        if: env.CHANNEL == 'latest'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -f latest "$GITHUB_SHA"
+          git push origin refs/tags/latest --force
+          NOTES="Automatically built from main commit ${GITHUB_SHA}."
+          if gh release view latest >/dev/null 2>&1; then
+            gh release edit latest --title "${REPO_NAME} latest" --prerelease --notes "$NOTES"
+            gh release upload latest "$ASSET_PATH" --clobber
+          else
+            gh release create latest "$ASSET_PATH" --title "${REPO_NAME} latest" \
+              --prerelease --notes "$NOTES" --target "$GITHUB_SHA"
+          fi
+
+      - name: Publish stable release
+        if: env.CHANNEL == 'stable'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -73,8 +103,6 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$ASSET_PATH" --clobber
           else
-            gh release create "$TAG" "$ASSET_PATH" \
-              --title "${REPO_NAME} ${TAG}" \
-              --generate-notes \
-              --target "$GITHUB_SHA"
+            gh release create "$TAG" "$ASSET_PATH" --title "${REPO_NAME} ${TAG}" \
+              --generate-notes --target "$GITHUB_SHA"
           fi
