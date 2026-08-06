@@ -1,0 +1,2 @@
+This resource file intentionally has no runtime effect.
+It was added on 2026-08-07 to trigger the first automatic latest Release build.
