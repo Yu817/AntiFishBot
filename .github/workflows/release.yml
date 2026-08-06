@@ -2,11 +2,10 @@ name: Release plugin JAR
 
 on:
   push:
-    branches: [main]
-    tags: ['v*']
-    paths:
-      - 'src/**'
-      - 'pom.xml'
+    branches:
+      - main
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -19,6 +18,7 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,70 +39,62 @@ jobs:
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             TAG="$GITHUB_REF_NAME"
             VERSION="${TAG#v}"
-            CHANNEL="stable"
-            ASSET_VERSION="$VERSION"
+            PRERELEASE="false"
           else
-            BASE_VERSION="$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)"
-            BASE_VERSION="${BASE_VERSION%-SNAPSHOT}"
             TAG="latest"
-            VERSION="${BASE_VERSION}-dev-${GITHUB_SHA::7}"
-            CHANNEL="latest"
-            ASSET_VERSION="latest"
+            VERSION="latest"
+            PRERELEASE="true"
           fi
           echo "REPO_NAME=$REPO_NAME" >> "$GITHUB_ENV"
           echo "TAG=$TAG" >> "$GITHUB_ENV"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
-          echo "ASSET_VERSION=$ASSET_VERSION" >> "$GITHUB_ENV"
+          echo "PRERELEASE=$PRERELEASE" >> "$GITHUB_ENV"
 
       - name: Build plugin
-        run: |
-          mvn -B -ntp versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
-          mvn -B -ntp clean package
+        run: mvn -B -ntp clean package
 
       - name: Prepare release asset
         shell: bash
         run: |
           JAR="$(find target -maxdepth 1 -type f -name '*.jar' \
-            ! -name '*-sources.jar' ! -name '*-javadoc.jar' ! -name 'original-*.jar' \
+            ! -name '*-sources.jar' \
+            ! -name '*-javadoc.jar' \
+            ! -name 'original-*.jar' \
             -printf '%s %p\n' | sort -nr | head -n 1 | cut -d' ' -f2-)"
           if [[ -z "$JAR" || ! -f "$JAR" ]]; then
             echo 'No plugin JAR was produced.' >&2
             exit 1
           fi
           mkdir -p release
-          ASSET_PATH="release/${REPO_NAME}-${ASSET_VERSION}.jar"
+          ASSET_PATH="release/${REPO_NAME}-${VERSION}.jar"
           cp "$JAR" "$ASSET_PATH"
           echo "ASSET_PATH=$ASSET_PATH" >> "$GITHUB_ENV"
 
-      - name: Publish rolling latest release
-        if: env.CHANNEL == 'latest'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git tag -f latest "$GITHUB_SHA"
-          git push origin refs/tags/latest --force
-          NOTES="Automatically built from main commit ${GITHUB_SHA}."
-          if gh release view latest >/dev/null 2>&1; then
-            gh release edit latest --title "${REPO_NAME} latest" --prerelease --notes "$NOTES"
-            gh release upload latest "$ASSET_PATH" --clobber
-          else
-            gh release create latest "$ASSET_PATH" --title "${REPO_NAME} latest" \
-              --prerelease --notes "$NOTES" --target "$GITHUB_SHA"
-          fi
-
-      - name: Publish stable release
-        if: env.CHANNEL == 'stable'
+      - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$ASSET_PATH" --clobber
+            if [[ "$PRERELEASE" == "true" ]]; then
+              gh release edit "$TAG" \
+                --title "${REPO_NAME} Latest Development Build" \
+                --notes "Automatically built from commit ${GITHUB_SHA}." \
+                --target "$GITHUB_SHA" \
+                --prerelease
+            fi
           else
-            gh release create "$TAG" "$ASSET_PATH" --title "${REPO_NAME} ${TAG}" \
-              --generate-notes --target "$GITHUB_SHA"
+            if [[ "$PRERELEASE" == "true" ]]; then
+              gh release create "$TAG" "$ASSET_PATH" \
+                --title "${REPO_NAME} Latest Development Build" \
+                --notes "Automatically built from commit ${GITHUB_SHA}." \
+                --target "$GITHUB_SHA" \
+                --prerelease
+            else
+              gh release create "$TAG" "$ASSET_PATH" \
+                --title "${REPO_NAME} ${TAG}" \
+                --generate-notes \
+                --target "$GITHUB_SHA"
+            fi
           fi
