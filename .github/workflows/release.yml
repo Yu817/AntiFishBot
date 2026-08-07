@@ -36,22 +36,47 @@ jobs:
         shell: bash
         run: |
           REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          COMMIT_SUBJECT="$(git log -1 --pretty=%s)"
+          COMMIT_BODY="$(git log -1 --pretty=%b)"
+
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             TAG="$GITHUB_REF_NAME"
             VERSION="${TAG#v}"
-            PRERELEASE="false"
           else
             TAG="latest"
-            VERSION="latest"
-            PRERELEASE="true"
+            VERSION="$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)"
+            VERSION="${VERSION%-SNAPSHOT}"
           fi
+
+          TITLE="Release ${VERSION} - ${COMMIT_SUBJECT}"
+
+          {
+            echo "## 更新內容"
+            echo
+            echo "- ${COMMIT_SUBJECT}"
+            if [[ -n "$COMMIT_BODY" ]]; then
+              echo
+              printf '%s\n' "$COMMIT_BODY"
+            fi
+            echo
+            echo "## 建置資訊"
+            echo
+            echo "- 版本：\`${VERSION}\`"
+            echo "- Commit：\`${GITHUB_SHA}\`"
+          } > release-notes.md
+
           echo "REPO_NAME=$REPO_NAME" >> "$GITHUB_ENV"
           echo "TAG=$TAG" >> "$GITHUB_ENV"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "PRERELEASE=$PRERELEASE" >> "$GITHUB_ENV"
+          echo "TITLE=$TITLE" >> "$GITHUB_ENV"
 
       - name: Build plugin
-        run: mvn -B -ntp clean package
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            mvn -B -ntp versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
+          fi
+          mvn -B -ntp clean package
 
       - name: Prepare release asset
         shell: bash
@@ -61,40 +86,41 @@ jobs:
             ! -name '*-javadoc.jar' \
             ! -name 'original-*.jar' \
             -printf '%s %p\n' | sort -nr | head -n 1 | cut -d' ' -f2-)"
+
           if [[ -z "$JAR" || ! -f "$JAR" ]]; then
             echo 'No plugin JAR was produced.' >&2
             exit 1
           fi
+
           mkdir -p release
           ASSET_PATH="release/${REPO_NAME}-${VERSION}.jar"
           cp "$JAR" "$ASSET_PATH"
           echo "ASSET_PATH=$ASSET_PATH" >> "$GITHUB_ENV"
 
-      - name: Create or update GitHub Release
+      - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
+          if [[ "$TAG" == "latest" ]]; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git tag -f latest "$GITHUB_SHA"
+            git push origin refs/tags/latest --force
+          fi
+
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$ASSET_PATH" --clobber
-            if [[ "$PRERELEASE" == "true" ]]; then
-              gh release edit "$TAG" \
-                --title "${REPO_NAME} Latest Development Build" \
-                --notes "Automatically built from commit ${GITHUB_SHA}." \
-                --target "$GITHUB_SHA" \
-                --prerelease
-            fi
+            gh release edit "$TAG" \
+              --title "$TITLE" \
+              --notes-file release-notes.md \
+              --target "$GITHUB_SHA" \
+              --prerelease=false \
+              --latest
           else
-            if [[ "$PRERELEASE" == "true" ]]; then
-              gh release create "$TAG" "$ASSET_PATH" \
-                --title "${REPO_NAME} Latest Development Build" \
-                --notes "Automatically built from commit ${GITHUB_SHA}." \
-                --target "$GITHUB_SHA" \
-                --prerelease
-            else
-              gh release create "$TAG" "$ASSET_PATH" \
-                --title "${REPO_NAME} ${TAG}" \
-                --generate-notes \
-                --target "$GITHUB_SHA"
-            fi
+            gh release create "$TAG" "$ASSET_PATH" \
+              --title "$TITLE" \
+              --notes-file release-notes.md \
+              --target "$GITHUB_SHA" \
+              --latest
           fi
